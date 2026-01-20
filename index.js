@@ -33,6 +33,9 @@ async function run() {
  await client.connect();
  const database = client.db("market_place");
  const productsCollection = database.collection("products");
+ 
+ const addJobDatabase = client.db("market_place");
+ const jobsCollection = addJobDatabase.collection("add-job")
 
  //All job Api
    app.get('/products', async (req, res) => {
@@ -59,17 +62,41 @@ async function run() {
      app.get('/products/:id', async(req, res) =>{
 
       const id = req.params.id;
-      const query = {_id: id};
+      const query = {_id: new ObjectId(id)};
       const result = await productsCollection.findOne(query)
       res.send(result)
      })
+     //add job api
+     app.get('/add-job', async(req, res) => {
+      const cursor = jobsCollection.find();
+      const result =await cursor.toArray();
+      res.send(result)
+
+     })
      // post api
-     app.post('/products', async(req, res) =>  {
-      const product = req.body;
-      const result = await productsCollection.insertOne(product);
+     app.post('/add-job', async(req, res) =>  {
+      const job = req.body;
+      const result = await jobsCollection.insertOne(job);
       res.send(result)
      })
-
+  // delete
+  app.delete('/add-job/:id', async (req, res) => {
+    const id = req.params.id;
+    const query = {_id: new ObjectId(id)};
+    const result = await jobsCollection.deleteOne(query);
+    res.send(result)
+  })
+  //update
+  app.patch('/add-job/:id', async(req, res) => {
+    const id  = req.params.id;
+    const jobUpdate = req.body;
+    const query = {_id: new ObjectId(id)};
+    const update = {
+      $set: jobUpdate
+    }
+    const result = await jobsCollection.updateOne(query,update);
+    res.send(result)
+  })
  
 
  await client.db("admin").command({ ping: 1 });
