@@ -4,11 +4,36 @@ const { MongoClient, ServerApiVersion, ObjectId } = require('mongodb');
 require('dotenv').config();
 const cors = require('cors');
 const port = process.env.PORT || 3000;
+const admin = require("firebase-admin");
+
+const serviceAccount = require("./market-place-firebase-adminsdk-key.json");
+
+admin.initializeApp({
+  credential: admin.credential.cert(serviceAccount)
+});
+
 
 
 //middle ware
 app.use(cors());
 app.use(express.json());
+const verifyFirebaseToken = async(req, res, next) => {
+  const authorization = req.headers.authorization;
+  if(!authorization){
+    return res.status(401).send({message: 'unauthorization access'})
+  }
+  const token = authorization.split(' ')[1];
+  try{
+    const decoded = await admin.auth().verifyIdToken(token);
+    console.log('inside token decoded', decoded);
+    req.token_email = decoded.email;
+    next();
+  }
+  catch(error){
+     return res.status(401).send({message: 'unauthorization access'})
+  }
+
+}
 
 
 //mongo DB setup
@@ -33,9 +58,8 @@ async function run() {
  await client.connect();
  const database = client.db("market_place");
  const productsCollection = database.collection("products");
+ const acceptedJobsCollection = database.collection("acceptedJobs");
  
- const addJobDatabase = client.db("market_place");
- const jobsCollection = addJobDatabase.collection("add-job")
 
  //All job Api
    app.get('/products', async (req, res) => {
@@ -43,7 +67,7 @@ async function run() {
       const result = await cursor.toArray();
       res.send(result)
     })
-// recent Api
+// latest product Api
     app.get('/latest-products', async (req, res) => {
       const cursor = productsCollection.find().limit(6);
       const result = await cursor.toArray();
@@ -60,41 +84,50 @@ async function run() {
 
     //job details ID APi
      app.get('/products/:id', async(req, res) =>{
-
       const id = req.params.id;
       const query = {_id: new ObjectId(id)};
       const result = await productsCollection.findOne(query)
       res.send(result)
      })
-     //add job api
-     app.get('/add-job', async(req, res) => {
-      const cursor = jobsCollection.find();
-      const result =await cursor.toArray();
-      res.send(result)
-
-     })
+ 
      // post api
-     app.post('/add-job', async(req, res) =>  {
+     app.post('/products',verifyFirebaseToken, async(req, res) =>  {
       const job = req.body;
-      const result = await jobsCollection.insertOne(job);
+      const result = await productsCollection.insertOne(job);
       res.send(result)
      })
-  // delete
-  app.delete('/add-job/:id', async (req, res) => {
-    const id = req.params.id;
-    const query = {_id: new ObjectId(id)};
-    const result = await jobsCollection.deleteOne(query);
-    res.send(result)
-  })
+
+     // accepted-jobs api
+     app.post("/accepted-jobs", async (req, res) => {
+        const acceptedJob = req.body;
+       const result = await acceptedJobsCollection.insertOne(acceptedJob);
+       res.send({ insertedId: result.insertedId });
+      });
+
+      app.get("/accepted-jobs", async (req, res) => {
+        const result = await acceptedJobsCollection.find().toArray();
+        res.send(result);
+      });
+
+
+    app.delete("/accepted-jobs/:id", async (req, res) => {
+      const id = req.params.id;
+      const result = await acceptedJobsCollection.deleteOne({ _id: new ObjectId(id) });
+      res.send(result); 
+    });
+
+
+
+
   //update
-  app.patch('/add-job/:id', async(req, res) => {
+  app.patch('/products/:id', async(req, res) => {
     const id  = req.params.id;
-    const jobUpdate = req.body;
+    const updateJob = req.body;
     const query = {_id: new ObjectId(id)};
     const update = {
-      $set: jobUpdate
+      $set: updateJob
     }
-    const result = await jobsCollection.updateOne(query,update);
+    const result = await productsCollection.updateOne(query,update);
     res.send(result)
   })
  
